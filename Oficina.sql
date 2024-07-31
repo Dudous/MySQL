@@ -49,7 +49,7 @@ CREATE TABLE OrdemCarro (
 	IDOrdemCarro INT PRIMARY KEY AUTO_INCREMENT, 
     IDOrdem INT, 
     IDCarro INT, 
-    FOREIGN KEY (IDOrdem) REFERENCES OrdemDeServiço(IDOrdem), 
+    FOREIGN KEY (IDOrdem) REFERENCES OrdemDeServico(IDOrdem), 
     FOREIGN KEY (IDCarro) REFERENCES Carro(IDCarro)
 );
 
