@@ -25,7 +25,8 @@ CREATE TABLE Carro (
 	IDCarro INT PRIMARY KEY AUTO_INCREMENT, 
     Marca VARCHAR(15), 
     Modelo VARCHAR(15), 
-    Ano INT
+    Ano INT,
+    Placa CHAR(7)
 );
 
 CREATE TABLE Servico (
