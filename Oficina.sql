@@ -68,6 +68,6 @@ CREATE TABLE OrdemServico (
     IDOrdem INT,
     IDServico INT,
     FOREIGN KEY (IDOrdem) REFERENCES OrdemDeServico(IDOrdem), 
-	FOREIGN KEY (IDServico) REFERENCES Serviço(IDServico)
+	FOREIGN KEY (IDServico) REFERENCES Servico(IDServico)
 );
 
