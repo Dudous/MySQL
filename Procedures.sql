@@ -141,27 +141,292 @@ call pr_novo_veiculo('Ferrari', 'F40', 'fdk5423', 1987, 'Enzo', '12354376509', '
 select * from veiculos;
 
 -- Deletar um veículo e suas multas associadas (com trigger)
+CREATE TABLE deleted_veiculos (
+	id INT AUTO_INCREMENT PRIMARY KEY,
+    marca VARCHAR(255) NOT NULL,
+    modelo VARCHAR(255) NOT NULL,
+    placa VARCHAR(7) UNIQUE NOT NULL,
+    ano INT,
+    proprietario_id INT,
+    FOREIGN KEY (proprietario_id) REFERENCES Proprietarios(id)
+);
+
+CREATE TABLE deleted_multas (
+	id INT AUTO_INCREMENT PRIMARY KEY,
+    old_id INT,
+    valor DECIMAL(10, 2) NOT NULL,
+    pontos INT DEFAULT 0,
+    data_aplicacao DATE NOT NULL,
+    infracao_id INT,
+    FOREIGN KEY (infracao_id) REFERENCES Infracoes(id),
+    FOREIGN KEY (old_id) REFERENCES Multas(id)
+);
 
 
+
+DELIMITER $
+CREATE PROCEDURE delete_veiculo(IN del_id INT)
+BEGIN 
+
+	INSERT INTO deleted_multas (old_id, valor, pontos, data_aplicacao, infracao_id)
+    SELECT m.id, m.valor, m.pontos, m.data_aplicacao, m.infracao_id
+    FROM Multas m
+    LEFT JOIN Infracoes i ON i.id = m.infracao_id
+    WHERE i.veiculo_id = del_id;
+    
+    
+    INSERT INTO deleted_veiculos (id, marca, modelo, placa, ano, proprietario_id)
+    SELECT v.id, v.marca, v.modelo, v.placa, v.ano, v.proprietario_id
+    FROM Veiculos v
+    WHERE v.id = del_id;
+        
+END; $
+DELIMITER ;
 
 -- Inserir uma nova infração e atualizar multas associadas (com trigger)
+
+DELIMITER //
+Create Procedure AdicionarInfracao(n_descricao varchar(255), n_gravidade varchar(255), n_data_ocorrencia date, n_veiculo_id int)
+Begin
+	INSERT INTO Infracoes (descricao, gravidade, data_ocorrencia, veiculo_id) VALUES (n_descricao,n_gravidade,n_data_ocorrencia,n_veiculo_id);
+End
+
+//DELIMITER ;
+
+
 -- Atualizar pontos na carteira de um proprietário específico que levou uma multa(com trigger)
+
+-- cria a procedure para adicionar a multa
+
+DELIMITER //
+Create Procedure AdicionarMulta(n_valor int, n_pontos int, n_dataAplicação date, n_infracao_id int)
+Begin
+	INSERT INTO Multas (valor, pontos, data_aplicacao, infracao_id) VALUES (n_valor,n_pontos,n_dataAplicação,n_infracao_id);
+End
+
+//DELIMITER ;
+
+-- Cria a Trigger que ira adicionar os pontos ao proprietario
+
+DELIMITER //
+CREATE TRIGGER afterInsertMulta
+AFTER INSERT ON Multas
+FOR EACH ROW
+BEGIN
+	declare pontos_carteira_antiga int;
+    declare id_proprietario int;
+    
+	SELECT v.proprietario_id INTO id_proprietario FROM Infracoes i INNER JOIN Veiculos v ON i.veiculo_id = v.id WHERE i.id = NEW.infracao_id;
+    Select pontos_carteira into pontos_carteira_antiga From Proprietarios p WHERE p.id = id_proprietario;
+    
+	Update Proprietarios
+    set pontos_carteira = pontos_carteira_antiga + new.pontos
+    where id = id_proprietario;
+END
+//DELIMITER ;
+
+
 -- Deletar um proprietário e seus veículos associados (com trigger)
+
+CREATE TABLE deleted_veiculos (
+	id INT AUTO_INCREMENT PRIMARY KEY,
+    old_id INT,
+    marca VARCHAR(255) NOT NULL,
+    modelo VARCHAR(255) NOT NULL,
+    placa VARCHAR(7) UNIQUE NOT NULL,
+    ano INT,
+    proprietario_id INT,
+    FOREIGN KEY (proprietario_id) REFERENCES Proprietarios(id),
+    FOREIGN KEY (old_id) REFERENCES Veiculos(id)
+);
+
+CREATE TABLE deleted_proprietarios (
+	id INT AUTO_INCREMENT PRIMARY KEY,
+    old_id INT,
+    nome VARCHAR(255) NOT NULL,
+    cpf VARCHAR(11) UNIQUE NOT NULL,
+    endereco VARCHAR(255),
+    telefone VARCHAR(20),
+    pontos_cartreira INT DEFAULT 0,
+    FOREIGN KEY (old_id) REFERENCES Proprietarios(id)
+);
+
+DROP TABLE deleted_proprietarios;
+DROP TABLE deleted_veiculos;
+
+DELIMITER $
+CREATE PROCEDURE delete_proprietario(IN del_id INT)
+BEGIN 
+
+	INSERT INTO deleted_proprietarios(old_id, nome, cpf, endereco, telefone, pontos_cartreira)
+    SELECT p.id, p.nome, p.cpf, p.endereco, p.telefone, p.pontos_cartreira
+    FROM Proprietarios p
+    WHERE p.id = del_id;
+    
+    
+    INSERT INTO deleted_veiculos (old_id, marca, modelo, placa, ano, proprietario_id)
+    SELECT v.id, v.marca, v.modelo, v.placa, v.ano, v.proprietario_id
+    FROM Veiculos v
+    WHERE v.proprietario_id = del_id;
+        
+END; $
+DELIMITER ;
+
 -- Selecionar veículos com licenciamento expirado
+
+DELIMITER //
+CREATE PROCEDURE selecionar_expirado()
+BEGIN 
+	SELECT Veiculos.modelo
+    
+    FROM Licenciamentos INNER JOIN Veiculos
+    ON Licenciamentos.veiculo_id = Veiculos.id
+    
+    WHERE Licenciamentos.data_validade > CURDATE();
+END // 
+DELIMITER //
+
 -- Selecionar veículos que possuem multas graves
+
+DELIMITER //
+CREATE PROCEDURE selecionar_multas_graves()
+BEGIN 
+	SELECT Veiculos.modelo
+
+    FROM Multas INNER JOIN Infracoes
+    ON Multas.infracao_id= Infracoes.id
+    INNER JOIN Veiculos ON
+    Veiculos.id = Infracoes.veiculo_id
+    WHERE Multas.pontos > 4;
+    
+END // DELIMITER //
+
 -- Selecionar veículos acima de 2021 
+
+DELIMITER //
+CREATE PROCEDURE selecionar_acima_2021()
+BEGIN 
+	SELECT Veiculos.modelo
+    FROM Veiculos
+    WHERE ano > 2021;
+END // DELIMITER //
+
 -- Selecionar multas de veículos abaixo de 2020
+
+DELIMITER //
+CREATE PROCEDURE selecionar_multa_abaixo_2020()
+BEGIN 
+	SELECT Multas.valor
+    FROM Multas INNER JOIN Infracoes
+    ON Multas.infracao_id= Infracoes.id
+    INNER JOIN Veiculos ON
+    Veiculos.id = Infracoes.veiculo_id
+    WHERE Veiculos.ano < 2020;
+END // DELIMITER //
+
 -- Selecionar todos os veículos com multas pendentes
+
+DELIMITER //
+CREATE PROCEDURE selecionar_veiculos_multa()
+BEGIN 
+	SELECT Veiculos.modelo
+    FROM Multas INNER JOIN Infracoes
+    ON Multas.infracao_id = Infracoes.id
+    LEFT JOIN Veiculos ON
+    Veiculos.id = Infracoes.veiculo_id;
+END // DELIMITER //
+
 -- Inserir um novo proprietário
+
+DELIMITER //
+CREATE PROCEDURE inserir_proprietario(nome varchar(50), cpf varchar(50), endereco varchar(50), telefone varchar(50))
+BEGIN 
+	INSERT INTO Proprietarios(nome, cpf, endereco, telefone) VALUES(
+    nome, cpf, endereco, telefone);
+END // DELIMITER //
+
 -- Atualizar informações de um proprietário
+
+DELIMITER //
+CREATE PROCEDURE modificar_proprietario(id int, nome varchar(50), cpf varchar(50), endereco varchar(50), telefone varchar(50))
+BEGIN
+	UPDATE Proprietarios
+	SET nome = nome, cpf = cpf, endereco = endereco, telefone = telefone
+    WHERE Proprietarios.id = id;
+END // DELIMITER //
+
 -- Deletar um proprietário
+
+DELIMITER //
+CREATE PROCEDURE deletar_proprietario(id int)
+BEGIN
+	DELETE FROM Proprietarios WHERE id = id;
+END // DELIMITER //
+
 -- Selecionar todos os proprietários
+
+DELIMITER //
+CREATE PROCEDURE selecionar_proprietarios()
+BEGIN
+	SELECT * FROM Proprietarios;
+END // DELIMITER //
+
+
 -- Inserir uma nova infração
+
+DELIMITER $
+create procedure pr_insert_infracao(n_descricao VARCHAR(255), n_gravidade ENUM('Leve', 'Média', 'Grave', 'Gravíssima'), n_data_ocorrencia date, n_veiculo_id int)
+begin 
+	insert into infracoes(descricao, gravidade, data_ocorrencia, veiculo_id) values 
+    (n_descricao, n_gravidade, n_data_ocorrencia, n_veiculo_id);
+end
+$
+DELIMITER ;
+
+call pr_insert_infracao('Jogar lixo na rua', 'Média', '2024-05-20', 10);
+
+select * from infracoes;
+
 -- Atualizar informações de uma infração
+
+DELIMITER $
+create procedure pr_update_infracao(n_id int, n_descricao VARCHAR(255) )
+begin
+	update infracoes set descricao = n_descricao where id = n_id;
+end
+$
+DELIMITER ;
+
+call pr_update_infracao(1, "Carro barulhento");
+
+select * from infracoes;
+
 -- Deletar uma infração
+
+DELIMITER $
+create procedure pr_delete_infracao(id_infracao int)
+begin
+	delete from Multas where infracao_id = id_infracao;
+    delete from Infracoes where id = id_infracao;
+end
+$
+DELIMITER ;
+
+call pr_delete_infracao(10);
+
+select * from multas;
+
 -- Selecionar todas as infrações
 
+DELIMITER $
+create procedure pr_infracoes()
+begin
+	select * from infracoes;
+end
+$
+DELIMITER ;
 
+CALL pr_infracoes;
 
 -- Inserir um novo licenciamento
 
